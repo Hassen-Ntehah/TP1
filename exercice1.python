@@ -1,0 +1,127 @@
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+
+# ============================================================
+# Étape 1 : Chargement et exploration du jeu de données
+# ============================================================
+data = pd.read_csv('uber.csv')
+
+print("--- Aperçu des données ---")
+print(data.head())
+print("\n--- Informations sur les colonnes ---")
+print(data.info())
+print("\n--- Valeurs manquantes par colonne ---")
+print(data.isnull().sum())
+
+# ============================================================
+# Étape 2 : Nettoyage et préparation des données
+# ============================================================
+# 1. Suppression des valeurs manquantes
+data = data.dropna()
+
+# Harmonisation du nom de la colonne cible si nécessaire
+if 'fare_amount' in data.columns and 'fare' not in data.columns:
+  data['fare'] = data['fare_amount']
+
+# 2. Filtrage des valeurs aberrantes (tarif strictement positif)
+data = data[data['fare'] > 0]
+
+
+# Calcul de la distance parcourue (formule de Haversine en km) si non présente
+def haversine_distance(lat1, lon1, lat2, lon2):
+  r = 6371  # Rayon moyen de la Terre en km
+  phi1, phi2 = np.radians(lat1), np.radians(lat2)
+  delta_phi = np.radians(lat2 - lat1)
+  delta_lambda = np.radians(lon2 - lon1)
+
+  a = (
+      np.sin(delta_phi / 2.0) ** 2
+      + np.cos(phi1) * np.cos(phi2) * np.sin(delta_lambda / 2.0) ** 2
+  )
+  c = 2 * np.arctan2(np.sqrt(a), np.sqrt(1 - a))
+  return r * c
+
+
+if 'distance' not in data.columns:
+  data['distance'] = haversine_distance(
+      data['pickup_latitude'],
+      data['pickup_longitude'],
+      data['dropoff_latitude'],
+      data['dropoff_longitude'],
+  )
+  # Retirer les distances nulles ou aberrantes
+  data = data[(data['distance'] > 0) & (data['distance'] < 100)]
+
+# 3. Création des variables temporelles dérivées
+data['pickup_datetime'] = pd.to_datetime(data['pickup_datetime'])
+data['hour'] = data['pickup_datetime'].dt.hour
+data['day_of_week'] = data['pickup_datetime'].dt.dayofweek
+
+# ============================================================
+# Étape 3 : Séparation des données
+# ============================================================
+X = data[['distance', 'hour', 'day_of_week']]
+y = data['fare']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# ============================================================
+# Étape 4 : Entraînement du modèle de Régression Linéaire
+# ============================================================
+lr = LinearRegression()
+lr.fit(X_train, y_train)
+y_pred_lr = lr.predict(X_test)
+
+# ============================================================
+# Étape 5 : Évaluation de la Régression Linéaire
+# ============================================================
+mae_lr = mean_absolute_error(y_test, y_pred_lr)
+rmse_lr = np.sqrt(mean_squared_error(y_test, y_pred_lr))
+r2_lr = r2_score(y_test, y_pred_lr)
+
+print("\n--- Performances : Régression Linéaire ---")
+print(f'MAE  = {mae_lr:.4f}')
+print(f'RMSE = {rmse_lr:.4f}')
+print(f'R²   = {r2_lr:.4f}')
+
+# ============================================================
+# Étape 6 : Amélioration avec Random Forest
+# ============================================================
+rf = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
+rf.fit(X_train, y_train)
+y_pred_rf = rf.predict(X_test)
+
+mae_rf = mean_absolute_error(y_test, y_pred_rf)
+rmse_rf = np.sqrt(mean_squared_error(y_test, y_pred_rf))
+r2_rf = r2_score(y_test, y_pred_rf)
+
+print("\n--- Performances : Random Forest Regressor ---")
+print(f'MAE  = {mae_rf:.4f}')
+print(f'RMSE = {rmse_rf:.4f}')
+print(f'R²   = {r2_rf:.4f}')
+
+# ============================================================
+# Étape 7 : Visualisation des résultats
+# ============================================================
+plt.figure(figsize=(8, 6))
+plt.scatter(y_test, y_pred_rf, alpha=0.3, color='blue', label='Prédictions RF')
+plt.plot(
+    [y_test.min(), y_test.max()],
+    [y_test.min(), y_test.max()],
+    'r--',
+    lw=2,
+    label='Idéal (y = x)',
+)
+plt.xlabel('Valeurs réelles ($)')
+plt.ylabel('Valeurs prédites ($)')
+plt.title('Prédiction du tarif Uber - Random Forest')
+plt.legend()
+plt.tight_layout()
+plt.show()

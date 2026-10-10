@@ -1,0 +1,99 @@
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+
+# ============================================================
+# Étape 1 : Chargement et exploration
+# ============================================================
+data = pd.read_csv('train.csv')
+
+print("--- Aperçu des données ---")
+print(data.head())
+print("\n--- Informations sur les colonnes ---")
+print(data.info())
+print("\n--- Valeurs manquantes ---")
+print(data.isnull().sum())
+
+# ============================================================
+# Étape 2 : Nettoyage et traitement
+# ============================================================
+# Sélection des variables pertinentes
+features_to_keep = [
+    'Survived',
+    'Pclass',
+    'Sex',
+    'Age',
+    'SibSp',
+    'Parch',
+    'Fare',
+    'Embarked',
+]
+data = data[features_to_keep]
+
+# Imputation des valeurs manquantes
+data['Age'] = data['Age'].fillna(data['Age'].median())
+data['Embarked'] = data['Embarked'].fillna(data['Embarked'].mode()[0])
+
+# ============================================================
+# Étape 3 : Encodage des variables catégorielles
+# ============================================================
+le = LabelEncoder()
+data['Sex'] = le.fit_transform(data['Sex'])
+data['Embarked'] = le.fit_transform(data['Embarked'])
+
+# ============================================================
+# Étape 4 : Séparation des données
+# ============================================================
+X = data.drop('Survived', axis=1)
+y = data['Survived']
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42
+)
+
+# ============================================================
+# Étape 5 : Entraînement des modèles
+# ============================================================
+log_model = LogisticRegression(max_iter=1000, random_state=42)
+rf_model = RandomForestClassifier(n_estimators=100, random_state=42)
+
+log_model.fit(X_train, y_train)
+rf_model.fit(X_train, y_train)
+
+# ============================================================
+# Étape 6 : Évaluation des modèles
+# ============================================================
+y_pred_log = log_model.predict(X_test)
+y_pred_rf = rf_model.predict(X_test)
+
+print("\n--- Précision (Accuracy) ---")
+print('Accuracy (Régression Logistique) :', accuracy_score(y_test, y_pred_log))
+print('Accuracy (Random Forest)        :', accuracy_score(y_test, y_pred_rf))
+
+print("\n--- Rapport de classification (Random Forest) ---")
+print(classification_report(y_test, y_pred_rf))
+
+# ============================================================
+# Étape 7 : Matrice de confusion
+# ============================================================
+cm = confusion_matrix(y_test, y_pred_rf)
+
+plt.figure(figsize=(6, 5))
+sns.heatmap(
+    cm,
+    annot=True,
+    fmt='d',
+    cmap='Blues',
+    xticklabels=['Non survécu (0)', 'Survécu (1)'],
+    yticklabels=['Non survécu (0)', 'Survécu (1)'],
+)
+plt.title('Matrice de confusion - Titanic (Random Forest)')
+plt.xlabel('Prédit')
+plt.ylabel('Réel')
+plt.tight_layout()
+plt.show()
